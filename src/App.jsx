@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-
+import { supabase } from "./lib/supabase";
 const STORAGE_KEY = "jos-planner-v6";
 const SYNC_ROW_ID = "jos-main-planner";
-
+const USERNAME_TO_EMAIL = {
+  josue: "cabrerajosue680@gmail.com",
+};
 // Add these in a .env.local file when deploying:
 // VITE_SUPABASE_URL=https://your-project.supabase.co
 // VITE_SUPABASE_ANON_KEY=your-public-anon-key
@@ -368,7 +370,22 @@ export default function SimpleStudyTracker() {
   const [showTests, setShowTests] = useState(false);
   const [syncStatus, setSyncStatus] = useState(cloudSyncEnabled() ? "Connecting..." : "Local preview");
   const [cloudReady, setCloudReady] = useState(!cloudSyncEnabled());
+const [session, setSession] = useState(null);
+const [loginUsername, setLoginUsername] = useState("");
+const [loginPassword, setLoginPassword] = useState("");
+useEffect(() => {
+  supabase.auth.getSession().then(({ data }) => {
+    setSession(data.session);
+  });
 
+  const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    setSession(newSession);
+  });
+
+  return () => {
+    listener.subscription.unsubscribe();
+  };
+}, []);
   useEffect(() => {
     let cancelled = false;
 
@@ -537,7 +554,27 @@ export default function SimpleStudyTracker() {
     date.setDate(date.getDate() + days);
     setCurrentDay(toISODate(date));
   }
+async function handleLogin() {
+  const email = USERNAME_TO_EMAIL[loginUsername.trim().toLowerCase()];
 
+  if (!email) {
+    alert("Username not allowed.");
+    return;
+  }
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password: loginPassword,
+  });
+
+  if (error) {
+    alert(error.message);
+  }
+}
+
+async function handleLogout() {
+  await supabase.auth.signOut();
+}
   function resetApp() {
     const starter = getStarterData();
 
@@ -556,6 +593,52 @@ export default function SimpleStudyTracker() {
   }
 
   const allTestsPassed = tests.every((test) => test.pass);
+  if (!session) {
+  return (
+    <div className="min-h-screen bg-[#f6f7fb] p-4 text-slate-800">
+      <div className="mx-auto flex min-h-screen max-w-sm items-center">
+        <div className="w-full rounded-[28px] border-2 border-slate-700 bg-white p-6 shadow-[4px_4px_0px_0px_rgba(51,65,85,0.45)]">
+          <h1 className="mb-1 text-4xl font-black tracking-tight text-slate-800">
+            J<span className="text-[#16a34a] tracking-[-0.08em]">OS</span>
+          </h1>
+
+          <p className="mb-6 text-sm text-slate-500">
+            Sign in to your planner
+          </p>
+
+          <label className="mb-1 block text-xs font-semibold text-slate-500">
+            Username
+          </label>
+          <input
+            value={loginUsername}
+            onChange={(event) => setLoginUsername(event.target.value)}
+            className="mb-3 w-full rounded-xl border p-3 outline-none focus:border-[#22c55e]"
+            placeholder="josue"
+          />
+
+          <label className="mb-1 block text-xs font-semibold text-slate-500">
+            Password
+          </label>
+          <input
+            type="password"
+            value={loginPassword}
+            onChange={(event) => setLoginPassword(event.target.value)}
+            className="mb-4 w-full rounded-xl border p-3 outline-none focus:border-[#22c55e]"
+            placeholder="Your password"
+          />
+
+          <button
+            type="button"
+            onClick={handleLogin}
+            className="w-full rounded-xl bg-slate-700 p-3 font-semibold text-white"
+          >
+            Sign In
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
   return (
     <div className="min-h-screen bg-[#f6f7fb] p-4 text-slate-800">
@@ -585,7 +668,13 @@ export default function SimpleStudyTracker() {
               )}
             </div>
           </div>
-
+<button
+  type="button"
+  onClick={handleLogout}
+  className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500"
+>
+  Logout
+</button>
           <button
             type="button"
             onClick={resetApp}
